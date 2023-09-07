@@ -1,5 +1,3 @@
-
-from array import array
 import rasterio as rs
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,11 +34,11 @@ class procesamiento():
             return rgb
 
         def porcentaje(x,años):
-            if len(x)==1:return "Año inicial"
+            if len(x)==1:return "Dato inicial"
             else:
                 porc=(x[-1]-x[-2])/x[-2]*100
-                if porc>0:return f"Incremento del {round(porc,3)}% con\nrespecto al año {años[-2]}"
-                else:return f"Decremento del {round(porc,3)}% con\nrespecto al año {años[-2]}"
+                if porc>0:return f"Incremento del {round(porc,3)}% con\nrespecto a{años[-2]}"
+                else:return f"Decremento del {round(abs(porc),3)}% con\nrespecto a {años[-2]}"
 
         def info(ax,x,m):
             ax.text(0.5, 0.95, f"Pixeles totales: {x.size}", ha='center', va='center', fontsize=12, color='black')
@@ -53,9 +51,7 @@ class procesamiento():
             #ax.text(0.5, 0.6, f"", ha='right', va='center', fontsize=12, color='black')
             #ax.text(0.5, 0.6, f"", ha='right', va='center', fontsize=12, color='black')
             #ax.text(0.5, 0.6, f"", ha='right', va='center', fontsize=12, color='black')
-            salida1=f"Pixeles totales: {x.size} |  |  | | "
-            #plt.figtext(0.05,0.05,salida1, bbox = {'facecolor': 'oldlace', 'alpha': 0.5, 'boxstyle': "square,pad=0.3", 'ec': 'black'})
-
+ 
         def clas(x):
             if 0.6<x<=1:return 0
             elif 0.4<x<=0.6:return 1
@@ -136,7 +132,8 @@ class procesamiento():
                 fig.savefig(os.path.join(os.path.join(ruta,f"graficos"),f"visual_NDVI_{names[i][:-4]}.png"), dpi=300,bbox_inches='tight')
                 plt.close(fig)
             #plt.ion()
-            
+            global inicio
+            inicio=datetime.now()
             for i in range(len(names)):
                 fig, ax = plt.subplots()
                 im = ax.imshow(ndvi[i], cmap='RdYlGn',vmax=1)
@@ -158,12 +155,13 @@ class procesamiento():
             print("Graficos guardados :D")
                
         def alertas(x,ruta,crs,transform):
-            os.mkdir(os.path.join(ruta,"deteccion"))
+            rt_detec=os.path.join(ruta,"deteccion")
+            os.mkdir(rt_detec)
             matriz = np.empty((len(x[-1]),len(x[-1][0])))
             matriz[:] = np.nan
             c=0
             tip={0:"densa",1:"moderada",2:"escasa",3:"limpio"}
-            ar=open(os.path.join(os.path.join(ruta,"deteccion"),"registro.txt"),"w")
+            ar=open(os.path.join(rt_detec,"registro.txt"),"w")
             for i in range(len(x[-1])):
                 for e in range(len(x[-1][i])):
                     if not(np.isnan(x[-1][i][e])) and not(np.isnan(x[-2][i][e])):
@@ -183,16 +181,34 @@ class procesamiento():
             gdf = gdf[gdf['geometry'].area >= 37]
             gdf_menos=gdf[gdf['valor'].isin([1,2,3,5,6,9])]
             gdf_mas=gdf[gdf['valor'].isin([4,7,8,10,11,12])]
-            gdf.to_file(os.path.join(os.path.join(ruta,"deteccion"),"alertas.shp"))
-            gdf_menos.to_file(os.path.join(os.path.join(ruta,"deteccion"),"posible_perdida.shp"))
-            gdf_mas.to_file(os.path.join(os.path.join(ruta,"deteccion"),"posible_incremento.shp"))
-            print(f'Archivo shapefile creado en: {os.path.join(ruta,"deteccion")}')
-            #shp=gpd.read_file(os.path.join(os.path.join(ruta,"deteccion"),"alerta.shp"))                                                       
-            #gpd.io.file.fiona.drvsupport.supported_drivers['KML']='rw'  
-            #shp.to_file("prueba2.kml",driver="KML")  
+
+            carpeta_shp=os.path.join(rt_detec,"shp")
+            os.mkdir(carpeta_shp)
+            carpeta_kml=os.path.join(rt_detec,"kml")
+            os.mkdir(carpeta_kml)
+
+            gdf.to_file(os.path.join(carpeta_shp,"clasificacion.shp"))
+            gdf_menos.to_file(os.path.join(carpeta_shp,"posible_perdida.shp"))
+            gdf_mas.to_file(os.path.join(carpeta_shp,"posible_incremento.shp"))
+            print(f'Archivo shapefile creado en: {carpeta_shp}')
+            
+            shp=gpd.read_file(os.path.join(carpeta_shp,"clasificacion.shp"))                                                       
+            gpd.io.file.fiona.drvsupport.supported_drivers['KML']='rw'  
+            shp.to_file(os.path.join(carpeta_kml,"clasificacion.kml"),driver="KML") 
+            
+            shp2=gpd.read_file(os.path.join(carpeta_shp,"posible_perdida.shp"))                                                       
+            gpd.io.file.fiona.drvsupport.supported_drivers['KML']='rw'  
+            shp2.to_file(os.path.join(carpeta_kml,"posible_perdida.kml"),driver="KML")
+
+            shp3=gpd.read_file(os.path.join(carpeta_shp,"posible_incremento.shp"))                                                       
+            gpd.io.file.fiona.drvsupport.supported_drivers['KML']='rw'  
+            shp3.to_file(os.path.join(carpeta_kml,"posible_incremento.kml"),driver="KML")
+
+        def mostrar_img(x):
+            pass
         #--------------------------------------------------
         
-        inicio=datetime.now()
+        
         if tipo==1:
             tifs=listar_tif(self.directorio)
             imgs=[rs.open(os.path.join(ruta,i)) for i in tifs]
@@ -202,8 +218,7 @@ class procesamiento():
             guardar_ndvi(ruta_resultado,tifs,ndvis,imgs[0].crs,imgs[0].width,imgs[0].height,imgs[0].transform)
             mostrar_ndvi_individual(ruta_resultado,tifs,ndvis,1)
             alertas(ndvis,ruta_resultado,imgs[0].crs,imgs[0].transform)
-            ventana=ventana_secundaria()
-            ventana.generado_correctamente_unico(ruta)
+
         else:
             carpetas=self.directorio
             if "resultado" in self.directorio:
@@ -222,10 +237,10 @@ class procesamiento():
                 guardar_ndvi(os.path.join(ruta_resultado,i),tifs,ndvis,imgs[0].crs,imgs[0].width,imgs[0].height,imgs[0].transform)
                 mostrar_ndvi_individual(os.path.join(ruta_resultado,i),tifs,ndvis,0) 
                 print("_______________________________________________") 
-            ventana=ventana_secundaria()
-            ventana.generado_correctamente_unico(ruta)
-            print(self.directorio)
+        ventana=ventana_secundaria()
+        ventana.generado_correctamente_unico(ruta,f"tiempo total de ejecución: {(datetime.now()-inicio).total_seconds()} segundos")
         print(f"tiempo total: {(datetime.now()-inicio).total_seconds()} segundos | {(datetime.now()-inicio).total_seconds()*1000} milisegundos")
+        
         """
         #--------------------------------------------------
         #lectura de imagenes
